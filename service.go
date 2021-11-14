@@ -8,26 +8,22 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-type ObjectCreator interface {
+type ObjectResolver interface {
 	New() interface{}
+	PrimaryKey(v interface{}) string
 }
 
 type Config struct {
-	table   string
-	log     bool
-	creater ObjectCreator
+	Table   string
+	Log     bool
+	Creater ObjectResolver
 }
 
 type DynamoService struct {
 	svc        *dynamodb.DynamoDB
 	baseParams TableDescription
 	logger     *log.Logger
-	creater    ObjectCreator
-}
-
-func (d DynamoService) New() interface{} {
-	var data interface{}
-	return data
+	creater    ObjectResolver
 }
 
 func New(c Config, options *aws.Config) *DynamoService {
@@ -50,7 +46,7 @@ func New(c Config, options *aws.Config) *DynamoService {
 
 	// get aws description
 	description, err := svc.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: &c.table,
+		TableName: &c.Table,
 	})
 	if err != nil {
 		panic(err)
@@ -58,8 +54,8 @@ func New(c Config, options *aws.Config) *DynamoService {
 
 	// Get description and at it to our service for later use
 	service.baseParams = parseDescribeTable(description)
-	service.creater = c.creater
-	if c.log {
+	service.creater = c.Creater
+	if c.Log {
 		service.logger = log.Default()
 	}
 	return &service

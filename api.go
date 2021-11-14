@@ -13,8 +13,8 @@ import (
 )
 
 type QueryParams struct {
-	key   string
-	value interface{}
+	Key   string
+	Value interface{}
 }
 
 type queryExpression struct {
@@ -82,7 +82,7 @@ func (ds DynamoService) Put(in interface{}) (interface{}, error) {
 		Item:         item,
 		ReturnValues: &PUT_RETURN_VALUES,
 	}
-	out, err := ds.svc.PutItem(params)
+	_, err = ds.svc.PutItem(params)
 	if ds.logger != nil {
 		ds.logger.Println("PUT_ITEM: ", params)
 	}
@@ -91,39 +91,32 @@ func (ds DynamoService) Put(in interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	v := ds.creater.New()
-	err = dynamodbattribute.UnmarshalMap(out.Attributes, &v)
-	if err != nil {
-		return nil, err
-	}
-
-	return v, nil
+	return in, nil
 }
 
-func (ds DynamoService) Delete(pk string) (interface{}, error) {
+func (ds DynamoService) Delete(pk string) error {
 	params := &dynamodb.DeleteItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
 	}
-	res, err := ds.svc.DeleteItem(params)
+	_, err := ds.svc.DeleteItem(params)
 	if ds.logger != nil {
 		ds.logger.Println("DELETE_ITEM: ", params)
 	}
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	v := ds.creater.New()
-	err = dynamodbattribute.UnmarshalMap(res.Attributes, &v)
-	if err != nil {
-		return nil, err
-	}
-
-	return v, nil
+	return nil
 }
 
-func (ds DynamoService) Create(pk string, v interface{}) (interface{}, error) {
+func (ds DynamoService) Create(v interface{}) (interface{}, error) {
+	pk := ds.creater.PrimaryKey(v)
+	if pk == "" {
+		return nil, errors.New("primary key required for create")
+	}
+
 	params := &dynamodb.GetItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -145,7 +138,12 @@ func (ds DynamoService) Create(pk string, v interface{}) (interface{}, error) {
 	return ds.Put(v)
 }
 
-func (ds DynamoService) Update(pk string, v interface{}) (interface{}, error) {
+func (ds DynamoService) Update(v interface{}) (interface{}, error) {
+	pk := ds.creater.PrimaryKey(v)
+	if pk == "" {
+		return nil, errors.New("primary key required for update")
+	}
+
 	params := &dynamodb.GetItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -186,16 +184,16 @@ func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 	for _, qp := range qps {
 		var exist *TableSecondaryIndex = nil
 		for _, ind := range ds.baseParams.indexes {
-			if ind.key == qp.key {
+			if ind.key == qp.Key {
 				exist = &ind
 
 				attributes = append(attributes, map[string]interface{}{
-					":" + qp.key: qp.value,
+					":" + qp.Key: qp.Value,
 				})
 
 				expressions = append(expressions, queryExpression{
 					IndexName:  exist.name,
-					Expression: fmt.Sprintf("%s = :%s", qp.key, qp.key),
+					Expression: fmt.Sprintf("%s = :%s", qp.Key, qp.Key),
 				})
 			}
 		}

@@ -1,7 +1,6 @@
 package dynamo
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -22,10 +21,33 @@ func (v Invitation) New() interface{} {
 	return Invitation{}
 }
 
+func (inv Invitation) PrimaryKey(v interface{}) string {
+	var invitation Invitation
+	mapstructure.Decode(v, &invitation)
+	return invitation.ID
+}
+
+func Convert(in interface{}, out interface{}) error {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName: "json",
+		Result:  &out,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = decoder.Decode(in)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 var config = Config{
-	table:   "foundation-dev-invitations",
-	log:     false,
-	creater: Invitation{},
+	Table:   "foundation-dev-invitations",
+	Log:     false,
+	Creater: Invitation{},
 }
 
 var sample = Invitation{
@@ -34,10 +56,6 @@ var sample = Invitation{
 	Role:      "viewer",
 	Email:     "csullivan@teleology.io",
 	Expiry:    time.Now().Unix(),
-}
-
-func Convert(i interface{}, o interface{}) error {
-	return mapstructure.Decode(i, o)
 }
 
 func TestGet(t *testing.T) {
@@ -49,12 +67,12 @@ func TestGet(t *testing.T) {
 		t.Fail()
 	}
 
+	// check we can convert to our expected type
 	var invitation Invitation
 	err = Convert(out, &invitation)
 	if err != nil {
 		t.Fail()
 	}
-	fmt.Println("out", invitation)
 }
 
 func TestCollisions(t *testing.T) {
@@ -68,32 +86,28 @@ func TestCollisions(t *testing.T) {
 		Expiry:    time.Now().Unix(),
 	}
 
-	putResult, err := ddb.Put(out)
+	_, err := ddb.Put(out)
 	if err != nil {
 		t.Fail()
 	}
 
 	// We should have a collision here
-	createResult, err := ddb.Create(TEST_INVITATION_ID, out)
+	_, err = ddb.Create(out)
 	if err == nil {
 		t.Fail()
 	}
 
 	// Cleanup and test delete
-	deleteResult, err := ddb.Delete(TEST_INVITATION_ID)
+	err = ddb.Delete(TEST_INVITATION_ID)
 	if err != nil {
 		t.Fail()
 	}
-
-	fmt.Println("UPDATE", putResult)
-	fmt.Println("CREATE", createResult)
-	fmt.Println("DELETE", deleteResult)
 }
 
-func TestCreate(t *testing.T) {
+func TestCreateAndUpdate(t *testing.T) {
 	ddb := New(config, nil)
 
-	createResult, err := ddb.Create(TEST_INVITATION_ID, sample)
+	_, err := ddb.Create(sample)
 	if err != nil {
 		t.Fail()
 	}
@@ -101,18 +115,20 @@ func TestCreate(t *testing.T) {
 		t.Fail()
 	}
 
-	newer := Invitation{
+	updateResult, err := ddb.Update(Invitation{
 		ID:   TEST_INVITATION_ID,
 		Role: "publisher",
-	}
-
-	updateResult, err := ddb.Update(TEST_INVITATION_ID, newer)
+	})
 	if err != nil {
 		t.Fail()
 	}
 
-	fmt.Println("CREATE", createResult)
-	fmt.Println("UPDATE", updateResult)
+	// check we can convert to our expected type
+	var invitation Invitation
+	err = Convert(updateResult, &invitation)
+	if err != nil {
+		t.Fail()
+	}
 }
 
 func TestQuery(t *testing.T) {
@@ -120,12 +136,12 @@ func TestQuery(t *testing.T) {
 
 	out, err := ddb.Query([]QueryParams{
 		{
-			key:   "project_id",
-			value: "085dea80-1e49-4cd1-a739-e9f355f08f2a",
+			Key:   "project_id",
+			Value: "085dea80-1e49-4cd1-a739-e9f355f08f2a",
 		},
 		{
-			key:   "email",
-			value: "csullivan@teleology.io",
+			Key:   "email",
+			Value: "csullivan@teleology.io",
 		},
 	})
 	if err != nil {
@@ -137,6 +153,4 @@ func TestQuery(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-
-	fmt.Println("QUERY", invitations)
 }
