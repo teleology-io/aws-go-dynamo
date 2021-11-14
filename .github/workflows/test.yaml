@@ -9,6 +9,10 @@ jobs:
         go-version: [1.16.x, 1.17.x]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local 
+      AWS_SECRET_ACCESS_KEY: local
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -20,9 +24,5 @@ jobs:
       run: docker-compose up -d
     - name: Set up local dynamo tables
       run: aws dynamodb create-table --cli-input-json file://invitations-table.json --endpoint-url http://localhost:8000
-      env:
-        AWS_REGION: us-east-1
-        AWS_ACCESS_KEY_ID: local 
-        AWS_SECRET_ACCESS_KEY: local
     - name: Test
       run: go test ./...
