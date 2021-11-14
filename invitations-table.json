@@ -1,0 +1,61 @@
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "email",
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "id",
+            "AttributeType": "S"
+        },
+        {
+            "AttributeName": "project_id",
+            "AttributeType": "S"
+        }
+    ],
+    "TableName": "foundation-local-invitations",
+    "KeySchema": [
+        {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+        }
+    ],
+    "ProvisionedThroughput": {
+        "ReadCapacityUnits": 1,
+        "WriteCapacityUnits": 1
+    },
+    "GlobalSecondaryIndexes": [
+        {
+            "IndexName": "ProjectGSI",
+            "KeySchema": [
+                {
+                    "AttributeName": "project_id",
+                    "KeyType": "HASH"
+                }
+            ],
+            "Projection": {
+                "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 1,
+                "WriteCapacityUnits": 1
+            }
+        },
+        {
+            "IndexName": "EmailGSI",
+            "KeySchema": [
+                {
+                    "AttributeName": "email",
+                    "KeyType": "HASH"
+                }
+            ],
+            "Projection": {
+                "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 1,
+                "WriteCapacityUnits": 1
+            }
+        }
+    ]
+}

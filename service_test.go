@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -44,12 +45,6 @@ func Convert(in interface{}, out interface{}) error {
 	return nil
 }
 
-var config = Config{
-	Table:   "foundation-dev-invitations",
-	Log:     false,
-	Creater: Invitation{},
-}
-
 var sample = Invitation{
 	ID:        TEST_INVITATION_ID,
 	ProjectID: "085dea80-1e49-4cd1-a739-e9f355f08f2a",
@@ -58,11 +53,31 @@ var sample = Invitation{
 	Expiry:    time.Now().Unix(),
 }
 
-func TestGet(t *testing.T) {
-	ddb := New(config, nil)
+var DDB *DynamoService = nil
 
+func init() {
+	var endpoint = "http://localhost:8000"
+	var region = "us-east-1"
+
+	DDB = New(Config{
+		Table:   "foundation-local-invitations",
+		Log:     false,
+		Creater: Invitation{},
+	},
+		&aws.Config{
+			Endpoint: &endpoint,
+			Region:   &region,
+		})
+
+	_, err := DDB.Put(sample)
+	if err != nil {
+		panic("could not initialize tests")
+	}
+}
+
+func TestGet(t *testing.T) {
 	// var out Invitation
-	out, err := ddb.Get("bcf07e7e-c441-4eb6-8f94-8f1f14b369c5")
+	out, err := DDB.Get(TEST_INVITATION_ID)
 	if err != nil {
 		t.Fail()
 	}
@@ -76,8 +91,6 @@ func TestGet(t *testing.T) {
 }
 
 func TestCollisions(t *testing.T) {
-	ddb := New(config, nil)
-
 	out := Invitation{
 		ID:        TEST_INVITATION_ID,
 		ProjectID: "085dea80-1e49-4cd1-a739-e9f355f08f2a",
@@ -86,28 +99,26 @@ func TestCollisions(t *testing.T) {
 		Expiry:    time.Now().Unix(),
 	}
 
-	_, err := ddb.Put(out)
+	_, err := DDB.Put(out)
 	if err != nil {
 		t.Fail()
 	}
 
 	// We should have a collision here
-	_, err = ddb.Create(out)
+	_, err = DDB.Create(out)
 	if err == nil {
 		t.Fail()
 	}
 
 	// Cleanup and test delete
-	err = ddb.Delete(TEST_INVITATION_ID)
+	err = DDB.Delete(TEST_INVITATION_ID)
 	if err != nil {
 		t.Fail()
 	}
 }
 
 func TestCreateAndUpdate(t *testing.T) {
-	ddb := New(config, nil)
-
-	_, err := ddb.Create(sample)
+	_, err := DDB.Create(sample)
 	if err != nil {
 		t.Fail()
 	}
@@ -115,7 +126,7 @@ func TestCreateAndUpdate(t *testing.T) {
 		t.Fail()
 	}
 
-	updateResult, err := ddb.Update(Invitation{
+	updateResult, err := DDB.Update(Invitation{
 		ID:   TEST_INVITATION_ID,
 		Role: "publisher",
 	})
@@ -132,9 +143,7 @@ func TestCreateAndUpdate(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	ddb := New(config, nil)
-
-	out, err := ddb.Query([]QueryParams{
+	out, err := DDB.Query([]QueryParams{
 		{
 			Key:   "project_id",
 			Value: "085dea80-1e49-4cd1-a739-e9f355f08f2a",

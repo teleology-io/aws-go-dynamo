@@ -16,5 +16,9 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v2
+    - name: Run local dynamodb
+      run: docker-compose up -d
+    - name: Set up local dynamo tables
+      run: aws dynamodb create-table --cli-input-json file://invitations-table.json --endpoint-url http://localhost:8000
     - name: Test
       run: go test ./...
