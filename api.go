@@ -24,7 +24,7 @@ type queryExpression struct {
 
 var PUT_RETURN_VALUES = "ALL_OLD"
 
-func key(ds *DynamoService, pk string) map[string]*dynamodb.AttributeValue {
+func key(ds DynamoService, pk string) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
 		ds.baseParams.key: {
 			S: aws.String(pk),
@@ -36,13 +36,15 @@ func merge(maps ...map[string]interface{}) map[string]interface{} {
 	res := map[string]interface{}{}
 	for _, it := range maps {
 		for k, v := range it {
-			res[k] = v
+			if !reflect.ValueOf(v).IsZero() {
+				res[k] = v
+			}
 		}
 	}
 	return res
 }
 
-func (ds *DynamoService) Get(pk string, v interface{}) error {
+func (ds DynamoService) Get(pk string) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -53,25 +55,26 @@ func (ds *DynamoService) Get(pk string, v interface{}) error {
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if res.Item == nil {
-		return errors.New("No item found with pkey " + pk)
+		return nil, errors.New("No item found with pkey " + pk)
 	}
 
-	err = dynamodbattribute.UnmarshalMap(res.Item, &v)
+	out := ds.creater.New()
+	err = dynamodbattribute.UnmarshalMap(res.Item, &out)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return nil
+	return out, nil
 }
 
-func (ds *DynamoService) Put(in interface{}) error {
+func (ds DynamoService) Put(in interface{}) (interface{}, error) {
 	item, err := dynamodbattribute.MarshalMap(in)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	params := &dynamodb.PutItemInput{
@@ -79,19 +82,25 @@ func (ds *DynamoService) Put(in interface{}) error {
 		Item:         item,
 		ReturnValues: &PUT_RETURN_VALUES,
 	}
-	_, err = ds.svc.PutItem(params)
+	out, err := ds.svc.PutItem(params)
 	if ds.logger != nil {
 		ds.logger.Println("PUT_ITEM: ", params)
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	v := ds.creater.New()
+	err = dynamodbattribute.UnmarshalMap(out.Attributes, &v)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
-func (ds *DynamoService) Delete(pk string) (interface{}, error) {
+func (ds DynamoService) Delete(pk string) (interface{}, error) {
 	params := &dynamodb.DeleteItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -105,7 +114,7 @@ func (ds *DynamoService) Delete(pk string) (interface{}, error) {
 		return nil, err
 	}
 
-	var v interface{}
+	v := ds.creater.New()
 	err = dynamodbattribute.UnmarshalMap(res.Attributes, &v)
 	if err != nil {
 		return nil, err
@@ -114,7 +123,7 @@ func (ds *DynamoService) Delete(pk string) (interface{}, error) {
 	return v, nil
 }
 
-func (ds *DynamoService) Create(pk string, v interface{}) error {
+func (ds DynamoService) Create(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -125,18 +134,18 @@ func (ds *DynamoService) Create(pk string, v interface{}) error {
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// hasn't been created yet
 	if res.Item != nil {
-		return errors.New("A record already exists for '" + pk + "'")
+		return nil, errors.New("A record already exists for '" + pk + "'")
 	}
 
 	return ds.Put(v)
 }
 
-func (ds *DynamoService) Update(pk string, v interface{}) error {
+func (ds DynamoService) Update(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &ds.baseParams.table,
 		Key:       key(ds, pk),
@@ -146,38 +155,31 @@ func (ds *DynamoService) Update(pk string, v interface{}) error {
 		ds.logger.Println("UPDATE_COLLISION_CHECK: ", params)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var exist map[string]interface{}
 	err = dynamodbattribute.UnmarshalMap(res.Item, &exist)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	out, err := json.Marshal(v)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var updates map[string]interface{}
 	err = json.Unmarshal(out, &updates)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for k, v := range exist {
-		uk := updates[k]
-		// costly but we don't want to lost values here
-		if reflect.ValueOf(uk).IsZero() && !reflect.ValueOf(v).IsZero() {
-			updates[k] = v
-		}
-	}
-
-	return ds.Put(updates)
+	merged := merge(exist, updates)
+	return ds.Put(merged)
 }
 
-func (ds *DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
+func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 	var expressions []queryExpression
 	var attributes []map[string]interface{}
 
@@ -238,7 +240,7 @@ func (ds *DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 
 		if out.Items != nil {
 			for _, outItem := range out.Items {
-				newp := ds.empty()
+				newp := ds.creater.New()
 				err = dynamodbattribute.UnmarshalMap(outItem, &newp)
 				if err != nil {
 					return nil, err

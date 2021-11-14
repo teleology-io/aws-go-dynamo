@@ -8,25 +8,30 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
+type ObjectCreator interface {
+	New() interface{}
+}
+
 type Config struct {
-	table string
-	log   bool
-	empty func() interface{}
+	table   string
+	log     bool
+	creater ObjectCreator
 }
 
 type DynamoService struct {
 	svc        *dynamodb.DynamoDB
 	baseParams TableDescription
 	logger     *log.Logger
-	empty      func() interface{}
+	creater    ObjectCreator
+}
+
+func (d DynamoService) New() interface{} {
+	var data interface{}
+	return data
 }
 
 func New(c Config, options *aws.Config) *DynamoService {
 	service := DynamoService{}
-
-	if c.empty == nil {
-		panic("config requires empty function")
-	}
 
 	var sess *session.Session
 	if options != nil {
@@ -53,7 +58,7 @@ func New(c Config, options *aws.Config) *DynamoService {
 
 	// Get description and at it to our service for later use
 	service.baseParams = parseDescribeTable(description)
-	service.empty = c.empty
+	service.creater = c.creater
 	if c.log {
 		service.logger = log.Default()
 	}
