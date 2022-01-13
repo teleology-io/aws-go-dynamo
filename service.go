@@ -28,12 +28,9 @@ type DynamoService struct {
 
 func New(c Config, options *aws.Config) *DynamoService {
 	service := DynamoService{}
-
 	var sess *session.Session
 	if options != nil {
-		opts := session.Options{}
-		opts.Config.MergeIn(options)
-		sess = session.Must(session.NewSessionWithOptions(opts))
+		sess = session.Must(session.NewSession(options))
 	} else {
 		sess = session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
