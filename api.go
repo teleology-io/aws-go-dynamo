@@ -24,9 +24,9 @@ type queryExpression struct {
 
 var PUT_RETURN_VALUES = "ALL_OLD"
 
-func key(ds DynamoService, pk string) map[string]*dynamodb.AttributeValue {
+func buildPrimaryKey(t tableDef, pk string) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
-		ds.baseParams.key: {
+		t.baseParams.Key: {
 			S: aws.String(pk),
 		},
 	}
@@ -44,14 +44,14 @@ func merge(maps ...map[string]interface{}) map[string]interface{} {
 	return res
 }
 
-func (ds DynamoService) Get(pk string) (interface{}, error) {
+func (t tableDef) Get(pk string) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
-		TableName: &ds.baseParams.table,
-		Key:       key(ds, pk),
+		TableName: &t.baseParams.Table,
+		Key:       buildPrimaryKey(t, pk),
 	}
-	res, err := ds.svc.GetItem(params)
-	if ds.logger != nil {
-		ds.logger.Println("GET_ITEM: ", params)
+	res, err := db.GetItem(params)
+	if logger != nil {
+		logger.Println("GET_ITEM: ", params)
 	}
 
 	if err != nil {
@@ -62,7 +62,7 @@ func (ds DynamoService) Get(pk string) (interface{}, error) {
 		return nil, errors.New("No item found with pkey " + pk)
 	}
 
-	out := ds.creater.New()
+	out := reflect.New(t.t).Interface()
 	err = dynamodbattribute.UnmarshalMap(res.Item, &out)
 	if err != nil {
 		return nil, err
@@ -71,20 +71,20 @@ func (ds DynamoService) Get(pk string) (interface{}, error) {
 	return out, nil
 }
 
-func (ds DynamoService) Put(in interface{}) (interface{}, error) {
+func (t tableDef) Put(in interface{}) (interface{}, error) {
 	item, err := dynamodbattribute.MarshalMap(in)
 	if err != nil {
 		return nil, err
 	}
 
 	params := &dynamodb.PutItemInput{
-		TableName:    &ds.baseParams.table,
+		TableName:    &t.baseParams.Table,
 		Item:         item,
 		ReturnValues: &PUT_RETURN_VALUES,
 	}
-	_, err = ds.svc.PutItem(params)
-	if ds.logger != nil {
-		ds.logger.Println("PUT_ITEM: ", params)
+	_, err = db.PutItem(params)
+	if logger != nil {
+		logger.Println("PUT_ITEM: ", params)
 	}
 
 	if err != nil {
@@ -94,14 +94,14 @@ func (ds DynamoService) Put(in interface{}) (interface{}, error) {
 	return in, nil
 }
 
-func (ds DynamoService) Delete(pk string) error {
+func (t tableDef) Delete(pk string) error {
 	params := &dynamodb.DeleteItemInput{
-		TableName: &ds.baseParams.table,
-		Key:       key(ds, pk),
+		TableName: &t.baseParams.Table,
+		Key:       buildPrimaryKey(t, pk),
 	}
-	_, err := ds.svc.DeleteItem(params)
-	if ds.logger != nil {
-		ds.logger.Println("DELETE_ITEM: ", params)
+	_, err := db.DeleteItem(params)
+	if logger != nil {
+		logger.Println("DELETE_ITEM: ", params)
 	}
 
 	if err != nil {
@@ -111,19 +111,14 @@ func (ds DynamoService) Delete(pk string) error {
 	return nil
 }
 
-func (ds DynamoService) Create(v interface{}) (interface{}, error) {
-	pk := ds.creater.PrimaryKey(v)
-	if pk == "" {
-		return nil, errors.New("primary key required for create")
-	}
-
+func (t tableDef) Create(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
-		TableName: &ds.baseParams.table,
-		Key:       key(ds, pk),
+		TableName: &t.baseParams.Table,
+		Key:       buildPrimaryKey(t, pk),
 	}
-	res, err := ds.svc.GetItem(params)
-	if ds.logger != nil {
-		ds.logger.Println("CREATE_COLLISION_CHECK: ", params)
+	res, err := db.GetItem(params)
+	if logger != nil {
+		logger.Println("CREATE_COLLISION_CHECK: ", params)
 	}
 
 	if err != nil {
@@ -135,22 +130,17 @@ func (ds DynamoService) Create(v interface{}) (interface{}, error) {
 		return nil, errors.New("A record already exists for '" + pk + "'")
 	}
 
-	return ds.Put(v)
+	return t.Put(v)
 }
 
-func (ds DynamoService) Update(v interface{}) (interface{}, error) {
-	pk := ds.creater.PrimaryKey(v)
-	if pk == "" {
-		return nil, errors.New("primary key required for update")
-	}
-
+func (t tableDef) Update(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
-		TableName: &ds.baseParams.table,
-		Key:       key(ds, pk),
+		TableName: &t.baseParams.Table,
+		Key:       buildPrimaryKey(t, pk),
 	}
-	res, err := ds.svc.GetItem(params)
-	if ds.logger != nil {
-		ds.logger.Println("UPDATE_COLLISION_CHECK: ", params)
+	res, err := db.GetItem(params)
+	if logger != nil {
+		logger.Println("UPDATE_COLLISION_CHECK: ", params)
 	}
 	if err != nil {
 		return nil, err
@@ -174,17 +164,17 @@ func (ds DynamoService) Update(v interface{}) (interface{}, error) {
 	}
 
 	merged := merge(exist, updates)
-	return ds.Put(merged)
+	return t.Put(merged)
 }
 
-func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
+func (t tableDef) Query(qps []QueryParams) ([]interface{}, error) {
 	var expressions []queryExpression
 	var attributes []map[string]interface{}
 
 	for _, qp := range qps {
-		var exist *TableSecondaryIndex = nil
-		for _, ind := range ds.baseParams.indexes {
-			if ind.key == qp.Key {
+		var exist *tableGsi = nil
+		for _, ind := range t.baseParams.Indexes {
+			if ind.Key == qp.Key {
 				exist = &ind
 
 				attributes = append(attributes, map[string]interface{}{
@@ -192,7 +182,7 @@ func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 				})
 
 				expressions = append(expressions, queryExpression{
-					IndexName:  exist.name,
+					IndexName:  exist.Name,
 					Expression: fmt.Sprintf("%s = :%s", qp.Key, qp.Key),
 				})
 			}
@@ -209,7 +199,7 @@ func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 	}
 
 	params := dynamodb.QueryInput{
-		TableName:                 &ds.baseParams.table,
+		TableName:                 &t.baseParams.Table,
 		IndexName:                 &first.IndexName,
 		KeyConditionExpression:    &first.Expression,
 		ExpressionAttributeValues: expressionAttributeValues,
@@ -227,9 +217,9 @@ func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 
 	var items []interface{}
 	for ok := true; ok; {
-		out, err := ds.svc.Query(&params)
-		if ds.logger != nil {
-			ds.logger.Println("QUERY: ", params)
+		out, err := db.Query(&params)
+		if logger != nil {
+			logger.Println("QUERY: ", params)
 		}
 
 		if err != nil {
@@ -238,7 +228,7 @@ func (ds DynamoService) Query(qps []QueryParams) ([]interface{}, error) {
 
 		if out.Items != nil {
 			for _, outItem := range out.Items {
-				newp := ds.creater.New()
+				newp := reflect.New(t.t).Interface()
 				err = dynamodbattribute.UnmarshalMap(outItem, &newp)
 				if err != nil {
 					return nil, err

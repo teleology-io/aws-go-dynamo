@@ -2,58 +2,63 @@ package dynamo
 
 import (
 	"log"
+	"os"
+	"reflect"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
-type ObjectResolver interface {
-	New() interface{}
-	PrimaryKey(v interface{}) string
-}
-
 type Config struct {
-	Table   string
-	Log     bool
-	Creater ObjectResolver
+	Table            string
+	Model            interface{}
+	UseDescribeTable bool
 }
 
-type DynamoService struct {
-	svc        *dynamodb.DynamoDB
-	baseParams TableDescription
-	logger     *log.Logger
-	creater    ObjectResolver
+type tableDef struct {
+	baseParams tableSchema
+	model      interface{}
+	t          reflect.Type
 }
 
-func New(c Config, options *aws.Config) *DynamoService {
-	service := DynamoService{}
-	var sess *session.Session
-	if options != nil {
-		sess = session.Must(session.NewSession(options))
+type DynamoService struct{}
+
+// Use global session to avoid creating new ones
+var sess *session.Session = nil
+
+var db *dynamodb.DynamoDB = nil
+
+var logger *log.Logger = nil
+
+func (d *DynamoService) Table(c Config) *tableDef {
+	table := tableDef{}
+
+	if c.UseDescribeTable {
+		// Get description and at it to our service for later use
+		table.baseParams = schemaFromDescribeTable(c.Table)
 	} else {
-		sess = session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable,
-		}))
+		table.baseParams = schemaFromReflection(c.Table, c.Model)
 	}
 
-	// get dynamo service
-	svc := dynamodb.New(sess)
-	service.svc = svc
+	table.t = reflect.TypeOf(c.Model)
+	table.model = c.Model
 
-	// get aws description
-	description, err := svc.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: &c.Table,
-	})
-	if err != nil {
-		panic(err)
+	return &table
+}
+
+func New(s *session.Session, c *aws.Config) *DynamoService {
+	if sess == nil {
+		sess = s
 	}
 
-	// Get description and at it to our service for later use
-	service.baseParams = parseDescribeTable(description)
-	service.creater = c.Creater
-	if c.Log {
-		service.logger = log.Default()
+	if db == nil {
+		db = dynamodb.New(sess, c)
 	}
-	return &service
+
+	if os.Getenv("DYNAMO_VERBOSE") != "" {
+		logger = log.Default()
+	}
+
+	return &DynamoService{}
 }

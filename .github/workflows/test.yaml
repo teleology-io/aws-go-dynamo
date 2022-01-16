@@ -13,6 +13,7 @@ jobs:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local 
       AWS_SECRET_ACCESS_KEY: local
+      DYNAMO_VERBOSE: 1
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
