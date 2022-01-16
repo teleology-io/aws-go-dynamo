@@ -21,50 +21,31 @@ import (
 )
 
 type Expiration struct {
-	ID     string `json:"id"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	ID     string `json:"id" dynamo:"pk"`
+	Email  string `json:"email" dynamo:"gsi,EmailGSI"`
+	Role   string `json:"role" dynamo:"gsi,RoleGSI"`
 	Expiry int64  `json:"expiry"`
 }
 
-// Required!
-func (e Expiration) New() interface{} {
-	return Expiration{}
-}
-
-// Required!
-func (e Expiration) PrimaryKey(v interface{}) string {
-	var expires Expiration
-	mapstructure.Decode(v, expires)
-	return expires.ID
-}
-
 func main() {
-	config := dynamo.Config{
-		Table:   "sample-table",
-		Log:     false,
-		Creater: Expiration{},
-	}
-
-	ddb := dynamo.New(config, nil)
-}
-
-// Optional 
-func Decode(in interface{}, out interface{}) error {
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		TagName: "json",
-		Result:  &out,
+	sess := session.Must(session.NewSession())
+	dd := dynamo.New(sess, &aws.Config{
+		Region: aws.String("us-east-1"),
 	})
-	if err != nil {
-		return err
+
+	table := dd.Table(dynamo.Config{
+		Table: "sample-table",
+		Model: Expiration{},
+	})
+
+	
+	exp, err := table.Get("123")
+
+	updates := Expiration{
+		Role: "admin",
 	}
 
-	err = decoder.Decode(in)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	updatedExp, err := table.Update("123", updates)
 }
 ```
 
@@ -74,7 +55,7 @@ func Decode(in interface{}, out interface{}) error {
 
 ```golang
 // Does collision checking
-createdItem, err := ddb.Create(Expiration{
+createdItem, err := table.Create("test-id", Expiration{
   ID:     "test-id",
   Email:  "someemail@domain.com",
   Role:   "N/A",
@@ -85,7 +66,7 @@ createdItem, err := ddb.Create(Expiration{
 ### Update 
 ```golang
 // Does a get, merges updates and writes
-updatedItem, err := ddb.Update(Expiration{
+updatedItem, err := table.Update("test-id", Expiration{
   ID:     "test-id",
   Expiry: 0,
 })
@@ -94,7 +75,7 @@ updatedItem, err := ddb.Update(Expiration{
 ### Put 
 ```golang
 // Does not collision check and just writes
-putItem, err := ddb.Put(Expiration{
+putItem, err := table.Put(Expiration{
   ID:     "test-id-2",
   Email:  "anotherone@domain.com",
   Role:   "N/A",
@@ -105,19 +86,19 @@ putItem, err := ddb.Put(Expiration{
 ### Get 
 ```golang
 // Uses primary key to get item
-gotItem, err := ddb.Get("test-id-2")
+gotItem, err := table.Get("test-id-2")
 ```
 
 ### Delete 
 ```golang
 // Uses primary key to delete item
-err := ddb.Delete("test-id-2")
+err := table.Delete("test-id-2")
 ```
 
 ### Query 
 ```golang
 // Can search across n+1 global secondary indexes - must map to data def
-results, err := ddb.Query([]dynamo.QueryParams{
+results, err := table.Query([]dynamo.QueryParams{
   {
     Key:   "email",
     Value: "anotherone@domain.com",
