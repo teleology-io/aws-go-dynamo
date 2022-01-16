@@ -45,7 +45,7 @@ var sample = Invitation{
 	Expiry:    time.Now().Unix(),
 }
 
-var table *tableDef = nil
+var table *TableDef = nil
 
 func init() {
 	var endpoint = "http://localhost:8000"

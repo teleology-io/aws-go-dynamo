@@ -16,7 +16,7 @@ type Config struct {
 	UseDescribeTable bool
 }
 
-type tableDef struct {
+type TableDef struct {
 	baseParams tableSchema
 	model      interface{}
 	t          reflect.Type
@@ -31,8 +31,8 @@ var db *dynamodb.DynamoDB = nil
 
 var logger *log.Logger = nil
 
-func (d *DynamoService) Table(c Config) *tableDef {
-	table := tableDef{}
+func (d *DynamoService) Table(c Config) *TableDef {
+	table := TableDef{}
 
 	if c.UseDescribeTable {
 		// Get description and at it to our service for later use

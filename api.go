@@ -24,7 +24,7 @@ type queryExpression struct {
 
 var PUT_RETURN_VALUES = "ALL_OLD"
 
-func buildPrimaryKey(t tableDef, pk string) map[string]*dynamodb.AttributeValue {
+func buildPrimaryKey(t TableDef, pk string) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
 		t.baseParams.Key: {
 			S: aws.String(pk),
@@ -44,7 +44,7 @@ func merge(maps ...map[string]interface{}) map[string]interface{} {
 	return res
 }
 
-func (t tableDef) Get(pk string) (interface{}, error) {
+func (t TableDef) Get(pk string) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),
@@ -71,7 +71,7 @@ func (t tableDef) Get(pk string) (interface{}, error) {
 	return out, nil
 }
 
-func (t tableDef) Put(in interface{}) (interface{}, error) {
+func (t TableDef) Put(in interface{}) (interface{}, error) {
 	item, err := dynamodbattribute.MarshalMap(in)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (t tableDef) Put(in interface{}) (interface{}, error) {
 	return in, nil
 }
 
-func (t tableDef) Delete(pk string) error {
+func (t TableDef) Delete(pk string) error {
 	params := &dynamodb.DeleteItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),
@@ -111,7 +111,7 @@ func (t tableDef) Delete(pk string) error {
 	return nil
 }
 
-func (t tableDef) Create(pk string, v interface{}) (interface{}, error) {
+func (t TableDef) Create(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),
@@ -133,7 +133,7 @@ func (t tableDef) Create(pk string, v interface{}) (interface{}, error) {
 	return t.Put(v)
 }
 
-func (t tableDef) Update(pk string, v interface{}) (interface{}, error) {
+func (t TableDef) Update(pk string, v interface{}) (interface{}, error) {
 	params := &dynamodb.GetItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),
@@ -167,7 +167,7 @@ func (t tableDef) Update(pk string, v interface{}) (interface{}, error) {
 	return t.Put(merged)
 }
 
-func (t tableDef) Query(qps []QueryParams) ([]interface{}, error) {
+func (t TableDef) Query(qps []QueryParams) ([]interface{}, error) {
 	var expressions []queryExpression
 	var attributes []map[string]interface{}
 
