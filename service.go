@@ -11,9 +11,8 @@ import (
 )
 
 type Config struct {
-	Table            string
-	Model            interface{}
-	UseDescribeTable bool
+	Table string
+	Model interface{}
 }
 
 type TableDef struct {
@@ -32,19 +31,11 @@ var db *dynamodb.DynamoDB = nil
 var logger *log.Logger = nil
 
 func (d *DynamoService) Table(c Config) *TableDef {
-	table := TableDef{}
-
-	if c.UseDescribeTable {
-		// Get description and at it to our service for later use
-		table.baseParams = schemaFromDescribeTable(c.Table)
-	} else {
-		table.baseParams = schemaFromReflection(c.Table, c.Model)
+	return &TableDef{
+		baseParams: schemaFromReflection(c.Table, c.Model),
+		t:          reflect.TypeOf(c.Model),
+		model:      c.Model,
 	}
-
-	table.t = reflect.TypeOf(c.Model)
-	table.model = c.Model
-
-	return &table
 }
 
 func New(s *session.Session, c *aws.Config) *DynamoService {

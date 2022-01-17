@@ -24,9 +24,21 @@ type queryExpression struct {
 
 var PUT_RETURN_VALUES = "ALL_OLD"
 
+func getPrimaryKey(name string, it interface{}) string {
+	v := reflect.ValueOf(it)
+	t := reflect.TypeOf(it)
+
+	for i := 0; i < v.NumField(); i++ {
+		if t.Field(i).Name == name {
+			return fmt.Sprintf("%v", v.Field(i).Interface())
+		}
+	}
+	return ""
+}
+
 func buildPrimaryKey(t TableDef, pk string) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
-		t.baseParams.Key: {
+		t.baseParams.PrimaryKey.Key: {
 			S: aws.String(pk),
 		},
 	}
@@ -111,7 +123,8 @@ func (t TableDef) Delete(pk string) error {
 	return nil
 }
 
-func (t TableDef) Create(pk string, v interface{}) (interface{}, error) {
+func (t TableDef) Create(v interface{}) (interface{}, error) {
+	pk := getPrimaryKey(t.baseParams.PrimaryKey.Name, v)
 	params := &dynamodb.GetItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),
@@ -133,7 +146,8 @@ func (t TableDef) Create(pk string, v interface{}) (interface{}, error) {
 	return t.Put(v)
 }
 
-func (t TableDef) Update(pk string, v interface{}) (interface{}, error) {
+func (t TableDef) Update(v interface{}) (interface{}, error) {
+	pk := getPrimaryKey(t.baseParams.PrimaryKey.Name, v)
 	params := &dynamodb.GetItemInput{
 		TableName: &t.baseParams.Table,
 		Key:       buildPrimaryKey(t, pk),

@@ -41,9 +41,8 @@ func init() {
 	})
 
 	table = db.Table(Config{
-		Table:            "foundation-local-invitations",
-		Model:            Invitation{},
-		UseDescribeTable: true,
+		Table: "foundation-local-invitations",
+		Model: Invitation{},
 	})
 
 	_, err := table.Put(sample)
@@ -76,7 +75,7 @@ func TestCollisions(t *testing.T) {
 	}
 
 	// We should have a collision here
-	_, err = table.Create(out.ID, out)
+	_, err = table.Create(out)
 	if err == nil {
 		t.Fail()
 	}
@@ -89,12 +88,12 @@ func TestCollisions(t *testing.T) {
 }
 
 func TestCreateAndUpdate(t *testing.T) {
-	_, err := table.Create(sample.ID, sample)
+	_, err := table.Create(sample)
 	if err != nil {
 		t.Fail()
 	}
 
-	_, err = table.Update(TEST_INVITATION_ID, Invitation{
+	_, err = table.Update(Invitation{
 		ID:   TEST_INVITATION_ID,
 		Role: "publisher",
 	})

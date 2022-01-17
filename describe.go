@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type tableGsi struct {
@@ -14,15 +12,18 @@ type tableGsi struct {
 }
 
 type tableSchema struct {
-	Table   string     `json:"name"`
-	Key     string     `json:"pk"`
-	Indexes []tableGsi `json:"gsi"`
+	Table      string     `json:"name"`
+	PrimaryKey tableGsi   `json:"pk"`
+	Indexes    []tableGsi `json:"gsi"`
 }
 
 func schemaFromReflection(tableName string, v interface{}) tableSchema {
 	schema := tableSchema{
-		Table:   tableName,
-		Key:     "",
+		Table: tableName,
+		PrimaryKey: tableGsi{
+			Key:  "",
+			Name: "",
+		},
 		Indexes: []tableGsi{},
 	}
 
@@ -41,7 +42,8 @@ func schemaFromReflection(tableName string, v interface{}) tableSchema {
 		}
 
 		if strings.Contains(tag, "pk") {
-			schema.Key = field.Tag.Get("json")
+			schema.PrimaryKey.Key = field.Tag.Get("json")
+			schema.PrimaryKey.Name = field.Name
 		}
 
 		if strings.Contains(tag, "gsi") {
@@ -57,44 +59,4 @@ func schemaFromReflection(tableName string, v interface{}) tableSchema {
 	}
 
 	return schema
-}
-
-func hash(elements []*dynamodb.KeySchemaElement) string {
-	key := ""
-	for _, schema := range elements {
-		if *schema.KeyType == "HASH" {
-			key = *schema.AttributeName
-		}
-	}
-
-	return key
-}
-
-func schemaFromDescribeTable(tableName string) tableSchema {
-	// get aws description
-	description, err := db.DescribeTable(&dynamodb.DescribeTableInput{
-		TableName: &tableName,
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	out := tableSchema{
-		Table: *description.Table.TableName,
-		// Get primary index
-		Key: hash(description.Table.KeySchema),
-	}
-
-	// Get secondary indexes
-	indexes := []tableGsi{}
-	for _, secondary := range description.Table.GlobalSecondaryIndexes {
-		indexes = append(indexes, tableGsi{
-			Key:  hash(secondary.KeySchema),
-			Name: *secondary.IndexName,
-		})
-	}
-
-	out.Indexes = indexes
-	return out
 }
