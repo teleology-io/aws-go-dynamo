@@ -70,7 +70,7 @@ func (t TableDef) Get(pk string) (interface{}, error) {
 		return nil, err
 	}
 
-	if res.Item == nil {
+	if res == nil || res.Item == nil {
 		return nil, errors.New("No item found with pkey " + pk)
 	}
 
